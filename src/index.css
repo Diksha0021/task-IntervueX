@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply antialiased;
+    background: #04070f;
+    color: #e2e8f8;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    @apply bg-white/[0.07] backdrop-blur-xl border border-white/10 shadow-xl;
+  }
+
+  .glass-card-hover {
+    @apply hover:border-cyan-400/30 hover:shadow-cyan-500/10 hover:-translate-y-1 transition-all duration-300;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-cyan-400 via-emerald-400 to-teal-300 bg-clip-text text-transparent;
+  }
+
+  .btn-primary {
+    @apply px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-emerald-500 font-semibold
+           hover:scale-[1.02] hover:shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98]
+           transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 rounded-2xl border border-white/20 font-medium
+           hover:bg-white/10 hover:border-white/30 active:scale-[0.98] transition-all duration-300;
+  }
+
+  .glow-orb {
+    @apply absolute rounded-full blur-3xl opacity-20 pointer-events-none;
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.5s ease-out forwards;
+  }
+
+  .ix-logo-mark {
+    background: linear-gradient(135deg, #63dca9, #7864ff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: #04070f;
+    flex-shrink: 0;
+    box-shadow: 0 0 18px rgba(99, 220, 169, 0.35);
+  }
+
+  .ix-logo-name {
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: #e2e8f8;
+    line-height: 1;
+  }
+
+  .ix-logo-name span {
+    color: #63dca9;
+  }
+
+  .ix-logo-sub {
+    font-size: 10px;
+    color: #4a5580;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .animate-pulse-soft {
+    animation: pulseSoft 2s ease-in-out infinite;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseSoft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.progress-bar {
+  background: linear-gradient(90deg, #06b6d4, #10b981, #06b6d4);
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+.mirror {
+  transform: scaleX(-1);
+}
+
+@keyframes speakPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.4); }
+  50% { transform: scale(1.05); box-shadow: 0 0 0 12px rgba(6, 182, 212, 0); }
+}
+
+@keyframes listenPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  50% { transform: scale(1.08); box-shadow: 0 0 0 16px rgba(16, 185, 129, 0); }
+}
+
+@keyframes waveBar {
+  0%, 100% { height: 8px; }
+  50% { height: 28px; }
+}
+
+.assistant-speaking {
+  animation: speakPulse 1.5s ease-in-out infinite;
+}
+
+.assistant-listening {
+  animation: listenPulse 1.2s ease-in-out infinite;
+}
+
+.wave-bar {
+  animation: waveBar 0.8s ease-in-out infinite;
+}
