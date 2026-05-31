@@ -25,15 +25,15 @@ const server = createServer(app)
 
 attachSocketIO(server)
 
-app.use(cors({
-  origin: process.env.ALLOWED_ORIGIN ?? true,
-  credentials: true,
-}))
-
 const allowedOrigins = (process.env.ALLOWED_ORIGIN ?? '').split(',').map(s => s.trim()).filter(Boolean)
 
 app.use(cors({
-  origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true)
+    if (allowedOrigins.length === 0) return callback(null, true)
+    if (allowedOrigins.includes(origin)) return callback(null, origin)
+    callback(new Error('Not allowed by CORS'))
+  },
   credentials: true,
 }))
 
