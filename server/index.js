@@ -29,6 +29,14 @@ app.use(cors({
   origin: process.env.ALLOWED_ORIGIN ?? true,
   credentials: true,
 }))
+
+const allowedOrigins = (process.env.ALLOWED_ORIGIN ?? '').split(',').map(s => s.trim()).filter(Boolean)
+
+app.use(cors({
+  origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+  credentials: true,
+}))
+
 app.use(express.json({ limit: '2mb' }))
 
 
