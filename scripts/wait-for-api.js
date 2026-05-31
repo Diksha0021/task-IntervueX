@@ -1,7 +1,7 @@
 /**
  * Waits until the IntervueX API responds on /health (used before starting Vite).
  */
-const HEALTH_URL = process.env.API_HEALTH_URL ?? 'http://127.0.0.1:5000/health'
+const HEALTH_URL = process.env.API_HEALTH_URL ?? 'https://intervuex-api-driw.onrender.com/health'
 const MAX_ATTEMPTS = 60
 const DELAY_MS = 500
 
