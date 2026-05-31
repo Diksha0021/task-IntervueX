@@ -56,7 +56,7 @@ app.use(errorHandler)
 async function startServer() {
   await seedDemoUsers()
 
-  const host = process.env.HOST ?? '127.0.0.1'
+ const host = process.env.HOST ?? '0.0.0.0'
 
   await new Promise((resolve, reject) => {
     server.once('error', (err) => {
