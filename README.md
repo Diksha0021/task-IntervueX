@@ -527,11 +527,11 @@ GET /health
 
 ### Demo video
 
-[📹 Demo video link — ]()
+[📹 Demo video link — https://drive.google.com/file/d/1iwKOWqUgddPIOdsV6tVO6cFGHrKjDNRG/view?usp=drivesdk]()
 
 ### Live link
 
-[🌐 Live deployment — ]()
+[🌐 Live deployment — task-intervue-x-5fu5.vercel.app]()
 
 ### System walkthrough explanation
 
