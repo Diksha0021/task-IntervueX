@@ -11,7 +11,9 @@
     "dev:client": "node scripts/start-client.js",
     "dev:all": "concurrently -k -n api,web -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
     "build": "vite build",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "start": "vite preview"
+    
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",
