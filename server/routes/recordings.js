@@ -9,9 +9,15 @@ import { env } from '../config/env.js'
 
 const router = Router()
 
+const LEGACY_RECRUITER_EMAIL = 'recruiter@demo.com'
+
 function canAccessRecording(user, session) {
   if (!user || !session) return false
-  if (user.role === 'recruiter') return true
+  if (user.role === 'recruiter') {
+    const ownerId = session.session_data?.recruiterId ?? session.recruiterId
+    if (ownerId) return ownerId === user.id
+    return user.email?.toLowerCase() === LEGACY_RECRUITER_EMAIL
+  }
   return session.userId === user.id
 }
 

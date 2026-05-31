@@ -34,7 +34,15 @@ export async function createSession({ hardwareCheck, resumeFrom, interviewProfil
     body.interviewTitle = interviewProfile.title
     body.durationMinutes = interviewProfile.durationMinutes
     body.interviewKeywords = interviewProfile.keywords ?? []
-    body.questions = interviewProfile.questions.map((q) => q.text)
+    body.questions = (interviewProfile.questions ?? []).map((q) =>
+      typeof q === 'string' ? q : q.text
+    )
+    if (interviewProfile.isCustom) {
+      body.customInterviewId = interviewProfile.customInterviewId ?? interviewProfile.id
+      body.inviteCode = interviewProfile.inviteCode
+      body.recruiterId = interviewProfile.recruiterId
+      body.topics = interviewProfile.topics ?? []
+    }
   }
   return request('/api/sessions', {
     method: 'POST',

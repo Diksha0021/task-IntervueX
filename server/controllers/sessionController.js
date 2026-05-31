@@ -6,6 +6,7 @@ import {
 } from '../services/realtimeEvents.js'
 import { generateAndSaveSessionAnalytics } from '../services/analytics/index.js'
 import { getKeywordsForProfile } from '../config/interviewProfiles.js'
+import { findByInviteCode, findById as findCustomInterview } from '../store/customInterviewStore.js'
 import { log } from '../utils/logger.js'
 import { AppError } from '../middleware/errorHandler.js'
 
@@ -17,11 +18,38 @@ export async function createInterviewSession(req, res) {
     interviewTitle,
     durationMinutes,
     questions,
+    customInterviewId,
+    inviteCode,
+    recruiterId: bodyRecruiterId,
+    interviewKeywords,
+    topics,
   } = req.body ?? {}
 
   if (req.user.role !== 'candidate') {
     throw new AppError('Only candidates can start interviews', 403)
   }
+
+  let customInterview = null
+  if (inviteCode) {
+    customInterview = findByInviteCode(inviteCode)
+  } else if (customInterviewId) {
+    customInterview = findCustomInterview(customInterviewId)
+  }
+
+  if (customInterview && customInterview.isActive === false) {
+    throw new AppError('This interview is no longer accepting candidates', 410)
+  }
+
+  const resolvedProfileId = customInterview?.id ?? interviewProfileId
+  const resolvedTitle = customInterview?.title ?? interviewTitle
+  const resolvedDuration = customInterview?.durationMinutes ?? durationMinutes
+  const resolvedQuestions =
+    customInterview?.questions?.map((q) => (typeof q === 'string' ? q : q.text)) ??
+    questions
+  const resolvedKeywords =
+    customInterview?.keywords ?? interviewKeywords ?? getKeywordsForProfile(interviewProfileId)
+  const resolvedRecruiterId = customInterview?.recruiterId ?? bodyRecruiterId ?? null
+  const resolvedTopics = customInterview?.topics ?? topics ?? []
 
   if (resumeFrom) {
     const existing = await getSession(resumeFrom)
@@ -31,10 +59,14 @@ export async function createInterviewSession(req, res) {
       existing.userId === req.user.id
     ) {
       const patch = {
-        interviewProfileId: interviewProfileId ?? existing.session_data?.interviewProfileId,
-        interviewTitle: interviewTitle ?? existing.session_data?.interviewTitle,
-        durationMinutes: durationMinutes ?? existing.session_data?.durationMinutes,
-        questions: questions ?? existing.session_data?.questions,
+        interviewProfileId: resolvedProfileId ?? existing.session_data?.interviewProfileId,
+        customInterviewId: customInterview?.id ?? existing.session_data?.customInterviewId,
+        recruiterId: resolvedRecruiterId ?? existing.session_data?.recruiterId,
+        interviewTitle: resolvedTitle ?? existing.session_data?.interviewTitle,
+        durationMinutes: resolvedDuration ?? existing.session_data?.durationMinutes,
+        questions: resolvedQuestions ?? existing.session_data?.questions,
+        interviewKeywords: resolvedKeywords ?? existing.session_data?.interviewKeywords,
+        topics: resolvedTopics.length ? resolvedTopics : existing.session_data?.topics,
         lastResumedAt: new Date().toISOString(),
       }
       const updated = await updateSession(resumeFrom, patch)
@@ -46,20 +78,29 @@ export async function createInterviewSession(req, res) {
   const session = await createSession(
     {
       hardwareCheck: hardwareCheck ?? { camera: false, microphone: false },
-      interviewProfileId,
-      interviewTitle,
-      durationMinutes,
-      questions,
-      interviewKeywords: getKeywordsForProfile(interviewProfileId),
+      interviewProfileId: resolvedProfileId,
+      customInterviewId: customInterview?.id ?? customInterviewId ?? null,
+      recruiterId: resolvedRecruiterId,
+      interviewTitle: resolvedTitle,
+      durationMinutes: resolvedDuration,
+      questions: resolvedQuestions,
+      interviewKeywords: resolvedKeywords,
+      topics: resolvedTopics,
     },
     {
       userId: req.user.id,
       userEmail: req.user.email,
       candidateName: req.user.name ?? req.user.email?.split('@')[0],
+      recruiterId: resolvedRecruiterId,
     }
   )
 
-  log('info', 'Session created', { sessionId: session.id, userId: req.user.id })
+  log('info', 'Session created', {
+    sessionId: session.id,
+    userId: req.user.id,
+    recruiterId: resolvedRecruiterId,
+    customInterviewId: customInterview?.id,
+  })
   res.status(201).json(session)
 }
 
@@ -96,6 +137,9 @@ export async function completeInterviewSession(req, res) {
     report: reportPayload,
   })
 
+  const recruiterId =
+    incoming.recruiterId ?? session.session_data?.recruiterId ?? session.recruiterId ?? null
+
   if (reportPayload) {
     try {
       const { analytics } = await generateAndSaveSessionAnalytics(req.params.id, {
@@ -113,6 +157,7 @@ export async function completeInterviewSession(req, res) {
     emitReportGenerated(req.params.id, {
       report: reportPayload,
       recruiterStatus: incoming.recruiterStatus ?? 'Review Pending',
+      recruiterId,
     })
   }
 
@@ -128,6 +173,7 @@ export async function completeInterviewSession(req, res) {
     transcriptionStatus: updated?.session_data?.transcriptionStatus ?? 'pending',
     pipelineStatus: 'queued',
     userId: updated?.userId,
+    recruiterId,
   })
 
   runPostInterviewPipeline(req.params.id).catch((err) => {

@@ -150,6 +150,7 @@ export async function recoverStuckSessionIfNeeded(session) {
   emitReportGenerated(session.id, {
     report,
     recruiterStatus: sd.recruiterStatus ?? 'Review Pending',
+    recruiterId: sd.recruiterId ?? session.recruiterId ?? null,
   })
   emitInterviewCompleted(session.id, {
     status: 'completed',
@@ -157,6 +158,7 @@ export async function recoverStuckSessionIfNeeded(session) {
     transcriptionStatus: updated?.session_data?.transcriptionStatus ?? 'pending',
     pipelineStatus: 'queued',
     userId: updated?.userId,
+    recruiterId: sd.recruiterId ?? session.recruiterId ?? null,
   })
 
   runPostInterviewPipeline(session.id).catch((err) => {

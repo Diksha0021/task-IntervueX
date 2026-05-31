@@ -17,29 +17,34 @@ function basePayload(sessionId, extra = {}) {
 }
 
 /**
- * Emit to session room and recruiter dashboard room.
+ * Emit to session room and the owning recruiter's dashboard room.
  */
-export function emitSessionRealtime(sessionId, event, payload = {}) {
+export function emitSessionRealtime(sessionId, event, payload = {}, recruiterId = null) {
   const io = getIO()
   if (!io || !sessionId) return
 
   const data = basePayload(sessionId, payload)
   io.to(`session:${sessionId}`).emit(event, data)
-  io.to('recruiters').emit(event, data)
+
+  if (recruiterId) {
+    io.to(`recruiter:${recruiterId}`).emit(event, data)
+  } else {
+    io.to('recruiters').emit(event, data)
+  }
 }
 
 export function emitChunkUploaded(sessionId, details) {
-  emitSessionRealtime(sessionId, RealtimeEvents.CHUNK_UPLOADED, details)
+  emitSessionRealtime(sessionId, RealtimeEvents.CHUNK_UPLOADED, details, details?.recruiterId)
 }
 
 export function emitTranscriptionProgress(sessionId, details) {
-  emitSessionRealtime(sessionId, RealtimeEvents.TRANSCRIPTION_PROGRESS, details)
+  emitSessionRealtime(sessionId, RealtimeEvents.TRANSCRIPTION_PROGRESS, details, details?.recruiterId)
 }
 
 export function emitInterviewCompleted(sessionId, details) {
-  emitSessionRealtime(sessionId, RealtimeEvents.INTERVIEW_COMPLETED, details)
+  emitSessionRealtime(sessionId, RealtimeEvents.INTERVIEW_COMPLETED, details, details?.recruiterId)
 }
 
 export function emitReportGenerated(sessionId, details) {
-  emitSessionRealtime(sessionId, RealtimeEvents.REPORT_GENERATED, details)
+  emitSessionRealtime(sessionId, RealtimeEvents.REPORT_GENERATED, details, details?.recruiterId)
 }

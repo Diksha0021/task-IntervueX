@@ -29,6 +29,7 @@ export function createFileSession(initial = {}, meta = {}) {
     id,
     userId: meta.userId ?? null,
     userEmail: meta.userEmail ?? null,
+    recruiterId: meta.recruiterId ?? initial.recruiterId ?? null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     session_data: {

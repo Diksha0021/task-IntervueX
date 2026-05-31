@@ -11,6 +11,7 @@ import candidatesRouter from './routes/candidates.js'
 import recordingsRouter from './routes/recordings.js'
 import transcriptsRouter from './routes/transcripts.js'
 import clientLogsRouter from './routes/clientLogs.js'
+import interviewsRouter from './routes/interviews.js'
 import { attachProctoringWebSocket } from './websocket/proctoring.js'
 import { attachSocketIO } from './websocket/socketServer.js'
 import { log } from './utils/logger.js'
@@ -39,6 +40,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', authRouter)
 app.use('/api/sessions', sessionsRouter)
 app.use('/api/reports', reportsRouter)
+app.use('/api/interviews', interviewsRouter)
 app.use('/api/chunks', chunksRouter)
 app.use('/api/candidates', candidatesRouter)
 app.use('/api/recordings', recordingsRouter)

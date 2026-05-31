@@ -10,6 +10,7 @@ import { PipelineStatusBanner } from './components/PipelineStatusBanner.jsx'
 import { useRecruiterRealtime } from './hooks/useRecruiterRealtime.js'
 import { useVoiceAssistant } from './hooks/useVoiceAssistant.js'
 import { RecruiterReviewPanel } from './components/recruiter/RecruiterReviewPanel.jsx'
+import { CreateInterviewPanel, RecruiterInterviewsList } from './components/recruiter/CreateInterviewPanel.jsx'
 import { FailureBanner } from './components/FailureBanner.jsx'
 import { RealtimeEvents } from './lib/realtime/events.js'
 import {
@@ -29,6 +30,14 @@ import {
   updateRecruiterDecision,
   removeRecruiterCandidate,
 } from './lib/interview/reportsApi.js'
+import {
+  fetchRecruiterInterviews,
+  deleteRecruiterInterview,
+  fetchInterviewProfileForCandidate,
+  savePendingInvite,
+  loadPendingInvite,
+  profileFromCustomInterview,
+} from './lib/interview/customInterviewsApi.js'
 import {
   saveActiveRoute,
   clearActiveRoute,
@@ -946,11 +955,38 @@ function LandingPage({ setPage, onWatchDemo, micStatus, camStatus, checkDevices,
 /* ─────────────────────────────────────────────
    USER DASHBOARD
 ───────────────────────────────────────────── */
-function UserDashboard({ setPage, onStartInterview, onResumeSession, micStatus, camStatus, checkDevices, reportStream, reportStreamEnded, reportPermissionDenied, infra, user, onLogout }) {
+function profileFromSessionData(sd) {
+  if (!sd) return INTERVIEW_PROFILES[0]
+  if (sd.customInterviewId) {
+    return {
+      id: sd.customInterviewId,
+      customInterviewId: sd.customInterviewId,
+      isCustom: true,
+      title: sd.interviewTitle ?? 'Interview',
+      roleLabel: sd.interviewTitle ?? 'Interview',
+      durationMinutes: sd.durationMinutes ?? 25,
+      keywords: sd.interviewKeywords ?? [],
+      topics: sd.topics ?? [],
+      questions: (sd.questions ?? []).map((text) =>
+        typeof text === 'string' ? { type: 'technical', text } : text
+      ),
+      recruiterId: sd.recruiterId,
+    }
+  }
+  return getProfileById(sd.interviewProfileId)
+}
+
+function UserDashboard({
+  setPage, onStartInterview, onResumeSession, micStatus, camStatus, checkDevices,
+  reportStream, reportStreamEnded, reportPermissionDenied, infra, user, onLogout,
+  invitedProfile, invitedRecruiterName, hasInvite,
+}) {
   const [cameraActive, setCameraActive] = useState(false)
   const [starting, setStarting] = useState(false)
-  const [selectedProfileId, setSelectedProfileId] = useState(INTERVIEW_PROFILES[0].id)
-  const selectedProfile = getProfileById(selectedProfileId)
+  const [selectedProfileId, setSelectedProfileId] = useState(
+    invitedProfile?.id ?? INTERVIEW_PROFILES[0].id
+  )
+  const selectedProfile = invitedProfile ?? getProfileById(selectedProfileId)
 
   const handleStreamReady = useCallback((stream) => { reportStream(stream); setCameraActive(true) }, [reportStream])
   const handleStreamEnd = useCallback((hadAudio) => { reportStreamEnded(hadAudio ?? true); setCameraActive(false) }, [reportStreamEnded])
@@ -1006,6 +1042,11 @@ function UserDashboard({ setPage, onStartInterview, onResumeSession, micStatus, 
             Interview <span className="gradient-text">Dashboard</span>
           </h1>
           {user && <p style={{ fontSize: 13, color: '#4a5580', marginTop: 5 }}>Signed in as {user.email}</p>}
+          {hasInvite && invitedRecruiterName && (
+            <p style={{ fontSize: 13, color: '#63dca9', marginTop: 8 }}>
+              Invited by {invitedRecruiterName} · {selectedProfile.title}
+            </p>
+          )}
         </div>
 
         {/* Stats */}
@@ -1044,21 +1085,44 @@ function UserDashboard({ setPage, onStartInterview, onResumeSession, micStatus, 
 
             <div className="glass-card" style={{ padding: '22px' }}>
               <h3 style={{ fontWeight: 700, fontSize: 16, color: '#e2e8f8', marginBottom: 5, marginTop: 0 }}>Interview Track</h3>
-              <p style={{ fontSize: 13, color: '#5a6485', marginBottom: 14, marginTop: 0 }}>Questions tailored to your chosen role.</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {INTERVIEW_PROFILES.map(p => (
-                  <button key={p.id} onClick={() => setSelectedProfileId(p.id)} style={{
-                    textAlign: 'left', padding: '11px 14px', borderRadius: 10, border: '1px solid',
-                    borderColor: selectedProfileId === p.id ? 'rgba(99,220,169,.4)' : 'rgba(255,255,255,.07)',
-                    background: selectedProfileId === p.id ? 'rgba(99,220,169,.08)' : 'transparent',
-                    cursor: 'pointer', transition: 'all .18s', color: '#e2e8f8',
-                    fontFamily: 'Outfit, sans-serif',
-                  }}>
-                    <div style={{ fontWeight: 500, fontSize: 14 }}>{p.title}</div>
-                    <div style={{ fontSize: 12, color: '#4a5580', marginTop: 2 }}>{formatDuration(p)} · 6 questions</div>
-                  </button>
-                ))}
-              </div>
+              <p style={{ fontSize: 13, color: '#5a6485', marginBottom: 14, marginTop: 0 }}>
+                {hasInvite ? 'Your recruiter assigned this interview.' : 'Choose a track or use your recruiter invite link.'}
+              </p>
+              {hasInvite ? (
+                <div style={{ padding: '14px 16px', borderRadius: 12, border: '1px solid rgba(99,220,169,.35)', background: 'rgba(99,220,169,.08)' }}>
+                  <div style={{ fontWeight: 600, fontSize: 15, color: '#e2e8f8' }}>{selectedProfile.title}</div>
+                  <div style={{ fontSize: 12, color: '#5a6485', marginTop: 6 }}>
+                    {formatDuration(selectedProfile)} · {selectedProfile.questions?.length ?? 6} questions
+                  </div>
+                  {(selectedProfile.topics ?? []).length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                      {selectedProfile.topics.map((t) => (
+                        <span key={t} className="ix-chip active" style={{ fontSize: 11 }}>{t}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div style={{ padding: '12px 14px', borderRadius: 10, background: 'rgba(245,200,66,.07)', border: '1px solid rgba(245,200,66,.2)', fontSize: 12, color: '#f5c842', marginBottom: 12 }}>
+                    Open the invite link from your recruiter (e.g. <code style={{ color: '#63dca9' }}>?invite=CODE</code>) or pick a demo track below.
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {INTERVIEW_PROFILES.map(p => (
+                      <button key={p.id} onClick={() => setSelectedProfileId(p.id)} style={{
+                        textAlign: 'left', padding: '11px 14px', borderRadius: 10, border: '1px solid',
+                        borderColor: selectedProfileId === p.id ? 'rgba(99,220,169,.4)' : 'rgba(255,255,255,.07)',
+                        background: selectedProfileId === p.id ? 'rgba(99,220,169,.08)' : 'transparent',
+                        cursor: 'pointer', transition: 'all .18s', color: '#e2e8f8',
+                        fontFamily: 'Outfit, sans-serif',
+                      }}>
+                        <div style={{ fontWeight: 500, fontSize: 14 }}>{p.title}</div>
+                        <div style={{ fontSize: 12, color: '#4a5580', marginTop: 2 }}>{formatDuration(p)} · 6 questions</div>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -1575,7 +1639,12 @@ function InterviewCompletePage({ interviewTitle, durationFormatted, setPage, pip
 /* ─────────────────────────────────────────────
    RECRUITER DASHBOARD
 ───────────────────────────────────────────── */
-function RecruiterDashboard({ setPage, candidates, onReview, onRemove, onFilter, user, onLogout, loadingCandidates, liveConnected, loadError, onRetryLoad }) {
+function RecruiterDashboard({
+  setPage, candidates, onReview, onRemove, onFilter, user, onLogout, loadingCandidates,
+  liveConnected, loadError, onRetryLoad, recruiterTab, setRecruiterTab, myInterviews,
+  loadingInterviews, showCreateInterview, setShowCreateInterview, onInterviewCreated,
+  onCopyInviteLink, onDeleteInterview, onRefreshInterviews,
+}) {
   const [filter, setFilter] = useState('all')
 
   const filtered = candidates.filter(c => {
@@ -1622,15 +1691,58 @@ function RecruiterDashboard({ setPage, candidates, onReview, onRemove, onFilter,
           <h1 style={{ fontWeight: 800, fontSize: 40, letterSpacing: '-.03em', color: '#e2e8f8' }}>
             Interview <span className="gradient-text">Analytics</span>
           </h1>
-          {user && <p style={{ fontSize: 13, color: '#4a5580', marginTop: 5 }}>Signed in as {user.email}</p>}
+          {user && <p style={{ fontSize: 13, color: '#4a5580', marginTop: 5 }}>Signed in as {user.email} · your interviews only</p>}
           {liveConnected && (
             <p style={{ fontSize: 12, color: '#63dca9', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#63dca9', boxShadow: '0 0 8px #63dca9' }} />
-              Live updates — new interviews appear automatically
+              Live updates — new candidates appear automatically
             </p>
           )}
         </div>
 
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
+          {[
+            { key: 'interviews', label: 'My Interviews' },
+            { key: 'candidates', label: 'Candidates' },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setRecruiterTab(tab.key)}
+              className={`ix-chip${recruiterTab === tab.key ? ' active' : ''}`}
+              style={{ padding: '10px 18px', fontSize: 13 }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {recruiterTab === 'interviews' && (
+          <>
+            {showCreateInterview && (
+              <CreateInterviewPanel
+                onCreated={(iv) => {
+                  onInterviewCreated?.(iv)
+                  setShowCreateInterview(false)
+                }}
+                onCancel={() => setShowCreateInterview(false)}
+              />
+            )}
+            {loadingInterviews ? (
+              <div className="glass-card" style={{ padding: 32, textAlign: 'center', color: '#4a5580' }}>Loading interviews…</div>
+            ) : (
+              <RecruiterInterviewsList
+                interviews={myInterviews}
+                onCopyLink={onCopyInviteLink}
+                onDelete={onDeleteInterview}
+                onCreateClick={() => setShowCreateInterview(true)}
+              />
+            )}
+          </>
+        )}
+
+        {recruiterTab === 'candidates' && (
+          <>
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 13, marginBottom: 28 }}>
           {stats.map(s => (
@@ -1742,6 +1854,8 @@ function RecruiterDashboard({ setPage, candidates, onReview, onRemove, onFilter,
             })}
           </div>
         )}
+          </>
+        )}
       </div>
     </div>
   )
@@ -1845,6 +1959,12 @@ function AuthenticatedApp({ auth }) {
   const [candidates, setCandidates] = useState([])
   const [loadingCandidates, setLoadingCandidates] = useState(false)
   const [recruiterLoadError, setRecruiterLoadError] = useState(null)
+  const [myInterviews, setMyInterviews] = useState([])
+  const [loadingInterviews, setLoadingInterviews] = useState(false)
+  const [recruiterTab, setRecruiterTab] = useState('interviews')
+  const [showCreateInterview, setShowCreateInterview] = useState(false)
+  const [invitedProfile, setInvitedProfile] = useState(null)
+  const [invitedRecruiterName, setInvitedRecruiterName] = useState('')
   const [toast, setToast] = useState(null)
   const [interviewProfile, setInterviewProfile] = useState(INTERVIEW_PROFILES[0])
   const [completeSummary, setCompleteSummary] = useState(null)
@@ -1853,6 +1973,15 @@ function AuthenticatedApp({ auth }) {
   const infra = useInterviewInfrastructure()
 
   useEffect(() => { checkDevices() }, [checkDevices])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const invite = params.get('invite')
+    if (invite) {
+      savePendingInvite(invite)
+      window.history.replaceState({}, '', window.location.pathname || '/')
+    }
+  }, [])
 
   useEffect(() => {
     if (isRecruiter && user && !recruiterLandingDoneRef.current) {
@@ -1887,8 +2016,7 @@ function AuthenticatedApp({ auth }) {
       .resumeSession()
       .then((s) => {
         if (s && s.session_data?.status !== 'completed') {
-          const pid = s.session_data?.interviewProfileId
-          if (pid) setInterviewProfile(getProfileById(pid))
+          setInterviewProfile(profileFromSessionData(s.session_data))
           setInterviewKey((k) => k + 1)
           setPage('interview')
         } else {
@@ -1904,6 +2032,22 @@ function AuthenticatedApp({ auth }) {
   }, [page, isCandidate])
 
   const showToast = (message, type = 'info') => setToast({ message, type })
+
+  useEffect(() => {
+    if (!isCandidate || !user) return
+    const code = loadPendingInvite()
+    if (!code) return
+    fetchInterviewProfileForCandidate(code)
+      .then((data) => {
+        const profile = profileFromCustomInterview(data.profile)
+        setInvitedProfile(profile)
+        setInterviewProfile(profile)
+        setInvitedRecruiterName(data.recruiterName ?? 'Recruiter')
+      })
+      .catch(() => {
+        showToast('Invite link is invalid or expired.', 'error')
+      })
+  }, [isCandidate, user?.id])
 
   const loadRecruiterCandidates = useCallback(async () => {
     if (!isRecruiter) return
@@ -1922,9 +2066,25 @@ function AuthenticatedApp({ auth }) {
     }
   }, [isRecruiter])
 
+  const loadRecruiterInterviews = useCallback(async () => {
+    if (!isRecruiter) return
+    setLoadingInterviews(true)
+    try {
+      const list = await fetchRecruiterInterviews()
+      setMyInterviews(list)
+    } catch {
+      setMyInterviews([])
+    } finally {
+      setLoadingInterviews(false)
+    }
+  }, [isRecruiter])
+
   useEffect(() => {
-    if (isRecruiter && user) loadRecruiterCandidates()
-  }, [isRecruiter, user, loadRecruiterCandidates])
+    if (isRecruiter && user) {
+      loadRecruiterCandidates()
+      loadRecruiterInterviews()
+    }
+  }, [isRecruiter, user, loadRecruiterCandidates, loadRecruiterInterviews])
 
   const { connected: recruiterLive } = useRecruiterRealtime({
     enabled: isRecruiter && !!user,
@@ -1936,6 +2096,7 @@ function AuthenticatedApp({ auth }) {
         try {
           const list = await fetchRecruiterCandidates()
           setCandidates(list)
+          loadRecruiterInterviews()
           setReviewCandidate((prev) => {
             if (!prev || prev.id !== data.sessionId) return prev
             const updated = list.find((c) => c.id === data.sessionId)
@@ -2045,6 +2206,8 @@ function AuthenticatedApp({ auth }) {
           interviewProfileId: profile.id,
           interviewKeywords: profile.keywords ?? [],
           endedEarly: result.endedEarly ?? result.answers.length < questions.length,
+          recruiterId: profile.recruiterId ?? null,
+          customInterviewId: profile.customInterviewId ?? profile.isCustom ? profile.id : null,
         }, sessionId)
         report.fullTranscript = completed?.session_data?.transcription ?? null
         report.mergeStatus = completed?.session_data?.mergeStatus ?? 'pending'
@@ -2074,11 +2237,36 @@ function AuthenticatedApp({ auth }) {
   }
 
   const handleResumeSession = (session) => {
-    const pid = session.session_data?.interviewProfileId
-    if (pid) setInterviewProfile(getProfileById(pid))
+    setInterviewProfile(profileFromSessionData(session.session_data))
     if (session?.id) saveActiveRoute({ page: 'interview', sessionId: session.id })
     setInterviewKey(k => k + 1)
     navigate('interview')
+  }
+
+  const handleCopyInviteLink = async (link, title) => {
+    try {
+      await navigator.clipboard.writeText(link)
+      showToast(`Invite link copied for "${title}"`, 'success')
+    } catch {
+      showToast(link, 'info')
+    }
+  }
+
+  const handleDeleteInterview = async (interview) => {
+    if (!window.confirm(`Remove interview "${interview.title}"? Existing candidate reports are kept.`)) return
+    try {
+      await deleteRecruiterInterview(interview.id)
+      setMyInterviews((prev) => prev.filter((i) => i.id !== interview.id))
+      showToast('Interview removed.', 'info')
+    } catch {
+      showToast('Could not remove interview.', 'error')
+    }
+  }
+
+  const handleInterviewCreated = (interview) => {
+    setMyInterviews((prev) => [interview, ...prev])
+    setRecruiterTab('interviews')
+    showToast('Interview created — copy the invite link for candidates.', 'success')
   }
 
   const showHome = page === 'home'
@@ -2125,7 +2313,23 @@ function AuthenticatedApp({ auth }) {
         <LandingPage setPage={navigate} onWatchDemo={() => setShowDemo(true)} micStatus={micStatus} camStatus={camStatus} checkDevices={checkDevices} reportStream={reportStream} reportStreamEnded={reportStreamEnded} reportPermissionDenied={reportPermissionDenied} user={user} onLogout={handleLogout} />
       )}
       {showUser && (
-        <UserDashboard setPage={navigate} onStartInterview={handleStartInterview} onResumeSession={handleResumeSession} micStatus={micStatus} camStatus={camStatus} checkDevices={checkDevices} reportStream={reportStream} reportStreamEnded={reportStreamEnded} reportPermissionDenied={reportPermissionDenied} infra={infra} user={user} onLogout={handleLogout} />
+        <UserDashboard
+          setPage={navigate}
+          onStartInterview={handleStartInterview}
+          onResumeSession={handleResumeSession}
+          micStatus={micStatus}
+          camStatus={camStatus}
+          checkDevices={checkDevices}
+          reportStream={reportStream}
+          reportStreamEnded={reportStreamEnded}
+          reportPermissionDenied={reportPermissionDenied}
+          infra={infra}
+          user={user}
+          onLogout={handleLogout}
+          invitedProfile={invitedProfile}
+          invitedRecruiterName={invitedRecruiterName}
+          hasInvite={!!invitedProfile}
+        />
       )}
       {showInterview && (
         <InterviewErrorBoundary key={interviewKey} onBack={() => navigate('user')} onRetry={() => setInterviewKey(k => k + 1)}>
@@ -2142,7 +2346,29 @@ function AuthenticatedApp({ auth }) {
         />
       )}
       {showRecruiter && (
-        <RecruiterDashboard setPage={navigate} candidates={candidates} loadingCandidates={loadingCandidates} loadError={recruiterLoadError} onRetryLoad={loadRecruiterCandidates} onReview={setReviewCandidate} onRemove={handleRemoveCandidate} onFilter={label => showToast(`Showing: ${label}`)} user={user} onLogout={handleLogout} liveConnected={recruiterLive} />
+        <RecruiterDashboard
+          setPage={navigate}
+          candidates={candidates}
+          loadingCandidates={loadingCandidates}
+          loadError={recruiterLoadError}
+          onRetryLoad={loadRecruiterCandidates}
+          onReview={setReviewCandidate}
+          onRemove={handleRemoveCandidate}
+          onFilter={(label) => showToast(`Showing: ${label}`)}
+          user={user}
+          onLogout={handleLogout}
+          liveConnected={recruiterLive}
+          recruiterTab={recruiterTab}
+          setRecruiterTab={setRecruiterTab}
+          myInterviews={myInterviews}
+          loadingInterviews={loadingInterviews}
+          showCreateInterview={showCreateInterview}
+          setShowCreateInterview={setShowCreateInterview}
+          onInterviewCreated={handleInterviewCreated}
+          onCopyInviteLink={handleCopyInviteLink}
+          onDeleteInterview={handleDeleteInterview}
+          onRefreshInterviews={loadRecruiterInterviews}
+        />
       )}
       <DemoModal open={showDemo} onClose={() => setShowDemo(false)} onTryDemo={() => navigate('user')} />
       <ReviewModal open={!!reviewCandidate} onClose={() => setReviewCandidate(null)} candidate={reviewCandidate} onAction={handleReviewAction} onRemove={handleRemoveCandidate} />

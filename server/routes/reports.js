@@ -6,6 +6,18 @@ import { asyncHandler } from '../middleware/asyncHandler.js'
 import { resolvePublicRecordingUrl } from '../services/storage/index.js'
 import { recoverStuckSessionIfNeeded } from '../services/recoverStuckSession.js'
 
+const LEGACY_RECRUITER_EMAIL = 'recruiter@demo.com'
+
+function sessionRecruiterId(session) {
+  return session.session_data?.recruiterId ?? session.recruiterId ?? null
+}
+
+function sessionVisibleToRecruiter(session, recruiterUser) {
+  const ownerId = sessionRecruiterId(session)
+  if (ownerId) return ownerId === recruiterUser.id
+  return recruiterUser.email?.toLowerCase() === LEGACY_RECRUITER_EMAIL
+}
+
 const router = Router()
 
 function isCandidateFlagged(c) {
@@ -101,7 +113,7 @@ function sessionToCandidate(session) {
   }
 }
 
-router.get('/', requireAuth, requireRole('recruiter'), asyncHandler(async (_req, res) => {
+router.get('/', requireAuth, requireRole('recruiter'), asyncHandler(async (req, res) => {
   const rawSessions = await listSessions()
   const sessions = await Promise.all(
     rawSessions.map((s) => recoverStuckSessionIfNeeded(s))
@@ -109,6 +121,7 @@ router.get('/', requireAuth, requireRole('recruiter'), asyncHandler(async (_req,
   const candidates = sessions
     .filter(
       (s) =>
+        sessionVisibleToRecruiter(s, req.user) &&
         !s.session_data?.recruiterHidden &&
         s.session_data?.report &&
         s.userId &&
@@ -126,6 +139,9 @@ router.get('/:id', requireAuth, requireRole('recruiter'), asyncHandler(async (re
   if (!session?.session_data?.report) {
     return res.status(404).json({ error: 'Interview report not found' })
   }
+  if (!sessionVisibleToRecruiter(session, req.user)) {
+    return res.status(403).json({ error: 'Access denied' })
+  }
   const candidate = sessionToCandidate(session)
   if (!candidate) return res.status(404).json({ error: 'Interview report not found' })
   res.json({ candidate })
@@ -142,6 +158,9 @@ router.patch('/:id/decision', requireAuth, requireRole('recruiter'), asyncHandle
   if (!session?.session_data?.report) {
     return res.status(404).json({ error: 'Interview report not found' })
   }
+  if (!sessionVisibleToRecruiter(session, req.user)) {
+    return res.status(403).json({ error: 'Access denied' })
+  }
 
   const updated = await updateSession(req.params.id, { recruiterStatus: decision })
   res.json({ candidate: sessionToCandidate(updated) })
@@ -151,6 +170,9 @@ router.delete('/:id', requireAuth, requireRole('recruiter'), asyncHandler(async 
   const session = await getSession(req.params.id)
   if (!session?.session_data?.report) {
     return res.status(404).json({ error: 'Interview report not found' })
+  }
+  if (!sessionVisibleToRecruiter(session, req.user)) {
+    return res.status(403).json({ error: 'Access denied' })
   }
 
   await updateSession(req.params.id, {

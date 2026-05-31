@@ -52,6 +52,7 @@ export function attachSocketIO(httpServer) {
     })
 
     if (socket.userRole === 'recruiter') {
+      socket.join(`recruiter:${socket.userId}`)
       socket.join('recruiters')
     }
 
