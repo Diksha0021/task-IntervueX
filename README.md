@@ -531,7 +531,7 @@ GET /health
 
 ### Live link
 
-[🌐 Live deployment — ](task-intervue-x-5fu5.vercel.app)
+[🌐 Live deployment — ](https://task-intervue-x-5fu5.vercel.app)
 
 ### System walkthrough explanation
 
